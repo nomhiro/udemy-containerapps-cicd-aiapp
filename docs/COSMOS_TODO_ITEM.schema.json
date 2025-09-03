@@ -1,0 +1,71 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://example.com/schemas/todo-item.schema.json",
+  "title": "TodoItem",
+  "description": "Todo アプリで Cosmos DB に保存される 1 アイテム (Container: Todos, 単一パーティション)",
+  "type": "object",
+  "required": [
+    "id",
+    "title",
+    "priority",
+    "completed",
+    "createdAt",
+    "updatedAt"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{6,64}$",
+      "$comment": "一意ID。UUID v4 などでも可 (pattern 緩和可)"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "description": {
+      "type": ["string", "null"],
+      "maxLength": 4000
+    },
+    "priority": {
+      "type": "string",
+      "enum": ["low", "normal", "high", "urgent"]
+    },
+    "dueDate": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "$comment": "UTC ISO8601。未設定可。"
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string", "maxLength": 40 },
+      "maxItems": 30,
+      "uniqueItems": false,
+      "default": []
+    },
+    "completed": {
+      "type": "boolean",
+      "default": false
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "_ts": {
+      "type": ["integer", "null"],
+      "readOnly": true,
+      "$comment": "Cosmos DB system timestamp (epoch sec)"
+    },
+    "_etag": {
+      "type": ["string", "null"],
+      "readOnly": true,
+      "$comment": "楽観ロック用 ETag。更新時 If-Match で使用予定。"
+    }
+  },
+  "additionalProperties": false,
+  "$comment": "追加属性を許可する場合は additionalProperties を true に変更。"
+}
