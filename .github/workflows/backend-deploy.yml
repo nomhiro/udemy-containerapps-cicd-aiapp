@@ -29,9 +29,9 @@ env:
   IMAGE_TAG: ${{ github.sha }}
 
 jobs:
-  test-build-push-deploy:
+  test:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -60,6 +60,16 @@ jobs:
       - name: Run tests
         working-directory: backend
         run: pytest -q
+
+  build-deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Azure Login (OIDC)
         uses: azure/login@v2
