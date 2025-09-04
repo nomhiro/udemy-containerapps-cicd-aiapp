@@ -13,6 +13,8 @@ services:
     docker:
     # path is relative to project directory; previously duplicated ./backend causing build failure
     path: ./Dockerfile
+    registry:
+      source: acr
     # azd will map selected outputs as environment variables automatically
     # Additional env vars/secrets can be set with: azd env set KEY value / azd secret set KEY value
   frontend:
@@ -22,6 +24,8 @@ services:
     docker:
     # path is relative to project directory
     path: ./Dockerfile
+    registry:
+      source: acr
 
 pipeline:
   # Placeholder; can be configured later with 'azd pipeline config'

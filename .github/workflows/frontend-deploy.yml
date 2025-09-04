@@ -1,0 +1,99 @@
+name: Frontend Deploy
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'frontend/**'
+      - 'infra/**'
+      - '.github/workflows/frontend-deploy.yml'
+  workflow_dispatch: {}
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: frontend-deploy-${{ github.ref_name }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '20'
+  ACR_NAME: ${{ vars.ACR_NAME }}
+  RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+  FRONTEND_IMAGE_REPO: frontend
+  FRONTEND_APP_NAME: ${{ vars.FRONTEND_APP_NAME }}
+  IMAGE_TAG: ${{ github.sha }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install deps
+        working-directory: frontend
+        run: npm ci
+
+      - name: Type check
+        working-directory: frontend
+        run: npm run typecheck
+
+      - name: Lint
+        working-directory: frontend
+        run: npm run lint -- --max-warnings=0
+
+      - name: Unit tests
+        working-directory: frontend
+        run: npm test
+
+  build-deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: ACR Login
+        run: az acr login --name $ACR_NAME
+
+      - name: Build Frontend Image
+        run: |
+          docker build -f frontend/Dockerfile -t $ACR_NAME.azurecr.io/$FRONTEND_IMAGE_REPO:$IMAGE_TAG ./frontend
+
+      - name: Push Image
+        run: docker push $ACR_NAME.azurecr.io/$FRONTEND_IMAGE_REPO:$IMAGE_TAG
+
+      - name: Deploy / Update Frontend Container App
+        run: |
+          az containerapp update \
+            --name $FRONTEND_APP_NAME \
+            --resource-group $RESOURCE_GROUP \
+            --image $ACR_NAME.azurecr.io/$FRONTEND_IMAGE_REPO:$IMAGE_TAG
+
+      - name: Output Image Ref
+        run: echo "IMAGE=$ACR_NAME.azurecr.io/$FRONTEND_IMAGE_REPO:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      - name: Summary
+        run: echo "Deployed $FRONTEND_APP_NAME with image tag $IMAGE_TAG" >> $GITHUB_STEP_SUMMARY

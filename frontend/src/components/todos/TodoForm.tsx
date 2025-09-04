@@ -118,19 +118,21 @@ export function TodoForm({ mode, initial, onDone }: Props) {
 
 // Inline UI primitives (Tailwind utility compositions)
 function Field({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
-  // アクセシビリティ: label と input を関連付け
+  type ControlProps = { id?: string; 'aria-invalid'?: string; 'aria-describedby'?: string }
   const baseId = label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'field'
-  const child = React.isValidElement(children)
-    ? React.cloneElement(children as any, {
-        id: (children as any).props.id || baseId,
-        'aria-invalid': error ? 'true' : undefined,
-        'aria-describedby': error ? `${baseId}-error` : (children as any).props['aria-describedby']
-      })
-    : children
+  let childNode = children
+  if (React.isValidElement<ControlProps>(children)) {
+    const props = children.props as ControlProps & { id?: string }
+    childNode = React.cloneElement(children, {
+      id: props.id || baseId,
+      'aria-invalid': error ? 'true' : undefined,
+      'aria-describedby': error ? `${baseId}-error` : props['aria-describedby']
+    })
+  }
   return (
     <div className="space-y-1.5">
       <label htmlFor={baseId} className="block text-xs font-medium tracking-wide text-neutral-600 dark:text-neutral-300 select-none">{label}</label>
-      {child}
+      {childNode}
       {error && <p id={`${baseId}-error`} className="text-[11px] text-red-500 font-medium">{error}</p>}
     </div>
   )

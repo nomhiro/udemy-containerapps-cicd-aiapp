@@ -7,8 +7,7 @@ on:
       - 'backend/**'
       - 'infra/**'
       - '.github/workflows/backend-deploy.yml'
-  workflow_dispatch:
-    {}
+  workflow_dispatch: {}
 
 permissions:
   id-token: write

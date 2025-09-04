@@ -1,0 +1,1 @@
+az role assignment create --assignee bc7574ec-64e1-4404-834d-343325fb1a78 --role AcrPull --scope /subscriptions/f80766c9-6be7-43f9-8369-d492efceff1e/resourceGroups/rg-todoapp/providers/Microsoft.ContainerRegistry/registries/learnacrp4tx

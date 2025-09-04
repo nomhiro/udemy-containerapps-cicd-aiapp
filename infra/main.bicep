@@ -86,11 +86,11 @@ module backend './modules/app.bicep' = {
     name: '${envName}-backend'
     location: location
     environmentId: env.outputs.id
-  image: backendImageResolved
+    image: backendImageResolved
     targetPort: backendPort
-  registryServer: acrLoginServer
-  serviceName: 'backend'
-  envName: envName
+    registryServer: acrLoginServer
+    serviceName: 'backend'
+    envName: envName
     envVars: [
       {
         name: 'COSMOS_ENDPOINT'
@@ -120,14 +120,19 @@ module frontend './modules/app.bicep' = {
     name: '${envName}-frontend'
     location: location
     environmentId: env.outputs.id
-  image: frontendImageResolved
+    image: frontendImageResolved
     targetPort: frontendPort
-  registryServer: acrLoginServer
-  serviceName: 'frontend'
-  envName: envName
+    registryServer: acrLoginServer
+    serviceName: 'frontend'
+    envName: envName
+    // Proxy pattern: client uses /api (Next.js API routes). Server-side API routes forward to backend.
     envVars: [
       {
         name: 'NEXT_PUBLIC_API_BASE_URL'
+        value: '/api'
+      }
+      {
+        name: 'BACKEND_API_BASE'
         value: 'https://${backend.outputs.fqdn}'
       }
     ]
