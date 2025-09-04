@@ -3,8 +3,20 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { TodoForm } from '../TodoForm'
 
-const createTodoMock = vi.fn(async () => ({ id: 'n1', title: 'A', completed: false, priority: 'normal', createdAt: 'c', updatedAt: 'u' }))
-const updateTodoMock = vi.fn(async () => ({}))
+// NOTE: 引数無しで定義すると Vitest の型推論で Parameters が [] となり
+// mock.calls[0][0] などのアクセスで TS2493 (タプル長 0) が発生するため
+// ダミー引数を明示してパラメータタプル長を確保する。
+// createTodo(data)
+const createTodoMock = vi.fn(async (_data: any) => ({
+  id: 'n1',
+  title: 'A',
+  completed: false,
+  priority: 'normal',
+  createdAt: 'c',
+  updatedAt: 'u'
+}))
+// updateTodo(id, data)
+const updateTodoMock = vi.fn(async (_id: any, _data: any) => ({}))
 vi.mock('@/lib/api/todos', () => ({
   createTodo: function() { return (createTodoMock as any).apply(this, arguments as any) },
   updateTodo: function() { return (updateTodoMock as any).apply(this, arguments as any) }
