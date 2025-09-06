@@ -6,6 +6,9 @@ __pycache__/
 .coverage
 htmlcov/
 
+# env files
+# 実ファイルは無視、サンプルはコミット
 .env*
+!.env.example
 
 .serena

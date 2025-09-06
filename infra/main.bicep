@@ -19,10 +19,9 @@ param enableCosmosFreeTier bool = false
 param cosmosDatabaseName string = 'TodoApp'
 param cosmosContainerName string = 'Todos'
 param cosmosPartitionKey string = '/id'
-param frontendPort int = 3000
-param backendPort int = 8000
-// ACR を常に作成 (envName + 固定4文字サフィックス) ※明示指定時は上書き
-@description('ACR name (always created). If not provided, deterministic name generated.')
+param frontendPort int = 80
+param backendPort int = 80
+@description('ACR name. If not provided, deterministic name generated.')
 @maxLength(50)
 param acrName string = toLower(replace(format('{0}acr{1}', envName, substring(uniqueString(resourceGroup().id, envName, 'acr'), 0, 4)),'-',''))
 @description('ACR SKU')
@@ -31,7 +30,7 @@ param acrSku string = 'Basic'
 var acrLoginServer = '${toLower(acrName)}.azurecr.io'
 var acrPullRoleDefinitionId = subscriptionResourceId('Microsoft.Authorization/roleDefinitions','7f951dda-4ed3-4680-a7ca-43fe172d538d')
 
-// 画像指定が既にレジストリ(FQDN)を含む場合はそのまま利用し、含まない場合のみ ACR プレフィックス付与
+// 指定ContainerImageが既にレジストリ(FQDN)を含む場合はそのまま利用し、含まない場合のみ ACR プレフィックス付与
 var backendImageResolved = contains(backendImage, '/') ? backendImage : '${acrLoginServer}/${backendImage}'
 var frontendImageResolved = contains(frontendImage, '/') ? frontendImage : '${acrLoginServer}/${frontendImage}'
 

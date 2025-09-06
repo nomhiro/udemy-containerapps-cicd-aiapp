@@ -66,15 +66,6 @@ GitHub → Settings → Secrets and variables → Actions。
 - develop ブランチ: min=1 / max=2 レプリカ
 
 ---
-## 4. イメージタグ命名規則
-| ブランチ | 形式 | 例 |
-|----------|------|----|
-| develop | `dev-<commitSHA>` | `dev-a1b2c3d` |
-| main | `prod-<commitSHA>` または workflow_dispatch の `manual_tag` | `prod-a1b2c3d` |
-
-手動デプロイ時に任意タグを利用したい場合は `workflow_dispatch` で `manual_tag` を入力。
-
----
 ## 5. 初回 / 既存リソース状態
 - 既存 (azd provision 済み) → そのまま update で差分反映
 - 未作成 → update が失敗し create にフォールバックし初回生成
@@ -89,14 +80,6 @@ GitHub → Settings → Secrets and variables → Actions。
 | python: command not found | setup-python 省略 | ワークフローファイル改変箇所を確認 |
 
 ---
-## 7. カスタマイズ例
-- セキュリティスキャン: `aquasecurity/trivy-action@v0`
-- 追加テストステージ: integration / e2e を matrix 別ジョブ化
-- キャッシュ: `actions/cache` で pip + (将来) frontend node_modules
-- ブルーグリーン: `az containerapp ingress traffic set --revision-weight <rev>=<weight>` で段階移行
-- Smoke Test: デプロイ直後に `/health` へ curl。失敗時 exit 1
-
----
 ## 8. 手動ロールバック手順
 ```bash
 az containerapp revision list -n $BACKEND_APP_NAME -g $RESOURCE_GROUP -o table
@@ -109,16 +92,3 @@ az containerapp ingress traffic set -n $BACKEND_APP_NAME -g $RESOURCE_GROUP --re
 az containerapp logs show -n $BACKEND_APP_NAME -g $RESOURCE_GROUP --follow
 az containerapp show -n $BACKEND_APP_NAME -g $RESOURCE_GROUP --query properties.latestRevisionName -o tsv
 ```
-
----
-## 10. より踏み込んだ改善案
-| カテゴリ | 改善 | 目的 |
-|----------|------|------|
-| Quality Gate | mypy / flake8 / ruff | 静的解析強化 |
-| Security | Trivy / Bandit | 既知脆弱性検出 |
-| Observability | OpenTelemetry Exporter | トレース可視化 |
-| Performance | Load Test (k6/Gatling) | リグレッション防止 |
-| Release Mgmt | Git Tag 自動付与 | バージョン管理一元化 |
-
----
-以上で GitHub Actions セットアップ完了です。フロントエンドや統合テスト拡張はこのファイルをテンプレートに追加してください。

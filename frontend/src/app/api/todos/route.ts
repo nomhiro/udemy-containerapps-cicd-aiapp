@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 
 // プロキシ先 FastAPI ベース URL (例: http://localhost:8000)
-const backend = process.env.BACKEND_API_BASE || 'http://localhost:8000'
+const backend = process.env.BACKEND_API_BASE || 'http://localhost:80'
 
 async function forward(r: Response) {
   if (r.status === 204 || r.status === 304) {

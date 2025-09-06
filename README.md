@@ -387,42 +387,32 @@ Cosmos を使わないフェーズでは `COSMOS_DISABLE=1` を設定して in-m
 - Azure CLI ログイン済み
 - Container Registry へのアクセス権限
 
-### リソース作成
+### リソース払い出し
 
-1. **リソースグループ作成**
-```bash
-az group create --name todo-app-rg --location japaneast
+```powershell
+az login
+az account show
 ```
 
-2. **Container Apps Environment作成**
-```bash
-az containerapp env create \
-  --name todo-app-env \
-  --resource-group todo-app-rg \
-  --location japaneast
+```powershell
+azd auth login
 ```
 
-3. **Cosmos DB作成**
-```bash
-az cosmosdb create \
-  --name todo-cosmos-db \
-  --resource-group todo-app-rg \
-  --default-consistency-level Session \
-  --enable-serverless
+```powershell
+(.venv) AzureContainerApps\src > azd up
+? Enter a unique environment name: todoapp
+
+New environment 'todoapp' created and set as default
+? Select an Azure Subscription to use:  1. shirokuma (f80766c9-6be7-43f9-8369-d492efceff1e)
+? Enter a value for the 'backendImage' infrastructure parameter: [? for help] backend
+? Enter a value for the 'backendImage' infrastructure parameter: backend
+? Enter a value for the 'envName' infrastructure parameter: learn
+? Enter a value for the 'frontendImage' infrastructure parameter: frontend
+? Pick a resource group to use: 1. Create a new resource group
+? Enter a name for the new resource group: (rg-todoapp)
+
+? Enter a name for the new resource group: rg-todoapp
 ```
-
-4. **Container Registry作成**
-```bash
-az acr create \
-  --name todoappregistry \
-  --resource-group todo-app-rg \
-  --sku Basic \
-  --admin-enabled true
-```
-
-### アプリケーションデプロイ
-
-詳細なデプロイ手順は [DEPLOYMENT.md](docs/DEPLOYMENT.md) を参照してください。
 
 ## API仕様
 
@@ -532,13 +522,7 @@ Application Insightsを通じて以下を監視：
    - 本番環境ブルーグリーンデプロイ
    - ヘルスチェック・ロールバック
 
-> GitHub Actions の詳細な設定手順は `GITHUB_ACTIONS_SETTINGS.md` を参照してください。
-
-### ブランチ戦略
-
-- `main`: 本番環境デプロイ
-- `develop`: ステージング環境デプロイ
-- `feature/*`: 機能開発ブランチ
+> GitHub Actions の詳細な設定手順は [GITHUB_ACTIONS_SETTINGS.md](./docs/GITHUB_ACTIONS_SETTINGS/GITHUB_ACTIONS_SETTINGS.md) を参照してください。
 
 ## パフォーマンス最適化
 

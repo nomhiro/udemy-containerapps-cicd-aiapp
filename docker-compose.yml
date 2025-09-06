@@ -7,9 +7,9 @@ services:
       dockerfile: Dockerfile
     container_name: todo-backend
     working_dir: /app
-    command: uvicorn --app-dir src main:app --host 0.0.0.0 --port 8000 --reload
+    command: uvicorn --app-dir src main:app --host 0.0.0.0 --port 80 --reload
     ports:
-      - "8000:8000"
+      - "8000:80"  # host:container
     env_file:
       - ./backend/.env.local.container
     environment:
@@ -17,7 +17,6 @@ services:
       PYTHONPATH: /app/src  # domain.* 用
     volumes:
       - ./backend/src:/app/src:rw,delegated
-      - backend_venv:/app/.venv
     # 開発速度重視: 依存が変わったらコンテナ再ビルド
     restart: unless-stopped
 
@@ -29,9 +28,11 @@ services:
     working_dir: /app
     command: npm run dev
     ports:
-      - "3000:3000"
+      - "3000:80"
     env_file:
       - ./frontend/.env.local.container
+    environment:
+      PORT: 80
     depends_on:
       - backend
     volumes:
