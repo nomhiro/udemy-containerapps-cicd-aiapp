@@ -509,7 +509,7 @@ docker push $ACR_LOGIN_SERVER/backend:latest
 ```powershell
 # --- 事前に設定する変数（例） ---
 $RESOURCE_GROUP      = $(azd env get-value AZURE_RESOURCE_GROUP)      # azd を使っている場合
-$ENV_NAME            = $(azd env get-value envName)                    # Managed Environment 接頭辞
+$$ENV_NAME            = "dev"                                          # Managed Environment 接頭辞
 $ACR_LOGIN_SERVER    = $(azd env get-value acrLoginServer)            # ACR の FQDN
 $FRONTEND_APP_NAME   = "todo-frontend"                               # 任意の App 名
 $BACKEND_APP_NAME    = "todo-backend"                                # 任意の App 名
