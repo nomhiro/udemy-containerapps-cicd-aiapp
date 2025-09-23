@@ -519,6 +519,16 @@ $BACKEND_IMAGE_TAG   = "backend:latest"
 # --- Managed Environment の ID を取得 ---
 $ENV_ID = az containerapp env show --name "${ENV_NAME}-cae" --resource-group $RESOURCE_GROUP --query id -o tsv
 
+# --- 新規作成例 (Backend) ---
+az containerapp create \
+  --name $BACKEND_APP_NAME \
+  --resource-group $RESOURCE_GROUP \
+  --environment $ENV_ID \
+  --image $ACR_LOGIN_SERVER/$BACKEND_IMAGE_TAG \
+  --ingress internal \
+  --target-port 80 \
+  --registry-server $ACR_LOGIN_SERVER
+
 # --- 新規作成例 (Frontend) ---
 az containerapp create \
   --name $FRONTEND_APP_NAME \
