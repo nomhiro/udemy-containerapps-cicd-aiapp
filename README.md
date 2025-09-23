@@ -504,16 +504,42 @@ docker push $ACR_LOGIN_SERVER/backend:latest
 
 1) Container Apps 本体を作成または既存アプリを更新
 
+リソース名やタグなど可変な値は事前に PowerShell の環境変数に設定しておくと、手順が読みやすくなりミスを減らせます。以下は推奨される手順例です。
+
 ```powershell
-# Managed Environment の ID を取得
- $envId = az containerapp env show --name $(azd env get-value envName)-cae --resource-group $(azd env get-value AZURE_RESOURCE_GROUP) --query id -o tsv
+# --- 事前に設定する変数（例） ---
+$RESOURCE_GROUP      = $(azd env get-value AZURE_RESOURCE_GROUP)      # azd を使っている場合
+$ENV_NAME            = $(azd env get-value envName)                    # Managed Environment 接頭辞
+$ACR_LOGIN_SERVER    = $(azd env get-value acrLoginServer)            # ACR の FQDN
+$FRONTEND_APP_NAME   = "todo-frontend"                               # 任意の App 名
+$BACKEND_APP_NAME    = "todo-backend"                                # 任意の App 名
+$FRONTEND_IMAGE_TAG  = "frontend:latest"                             # またはリリースタグ
+$BACKEND_IMAGE_TAG   = "backend:latest"
 
-# 新規作成 例
-az containerapp create --name <FRONTEND_APP_NAME> --resource-group $(azd env get-value AZURE_RESOURCE_GROUP) --environment $envId --image $(azd env get-value acrLoginServer)/frontend:latest --ingress external --target-port 80 --registry-server $(azd env get-value acrLoginServer)
+# --- Managed Environment の ID を取得 ---
+$ENV_ID = az containerapp env show --name "${ENV_NAME}-cae" --resource-group $RESOURCE_GROUP --query id -o tsv
 
-# 既存のプレースホルダーを更新
-az containerapp update --name <BACKEND_APP_NAME> --resource-group $(azd env get-value AZURE_RESOURCE_GROUP) --image $(azd env get-value acrLoginServer)/backend:latest
+# --- 新規作成例 (Frontend) ---
+az containerapp create \
+  --name $FRONTEND_APP_NAME \
+  --resource-group $RESOURCE_GROUP \
+  --environment $ENV_ID \
+  --image $ACR_LOGIN_SERVER/$FRONTEND_IMAGE_TAG \
+  --ingress external \
+  --target-port 80 \
+  --registry-server $ACR_LOGIN_SERVER
+
+# --- 既存アプリのイメージ差し替え例 (Backend) ---
+az containerapp update \
+  --name $BACKEND_APP_NAME \
+  --resource-group $RESOURCE_GROUP \
+  --image $ACR_LOGIN_SERVER/$BACKEND_IMAGE_TAG
 ```
+
+補足:
+- `azd` を使って環境を払い出している場合は `azd env get-value <name>` で値を取得して変数にセットできます。上の例ではそれを利用しています。
+- 上記はシェル変数（PowerShell のスコープ）として設定する例です。セッションを跨いで永続化したい場合は `Set-Item -Path Env:VAR -Value "value"` 等で環境変数に設定してください。
+- 本番運用では `:latest` ではなくコミット SHA やバージョンタグを使う運用を推奨します。
 
 注意点:
 - Container Apps の Managed Identity に `AcrPull` ロールを付与する必要があります。azd のプロビジョンで自動付与が行われる場合もありますが、必要に応じて以下のように手動実行できます。
