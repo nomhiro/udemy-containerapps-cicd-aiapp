@@ -469,7 +469,40 @@ docker build -f frontend/Dockerfile -t $(azd env get-value acrLoginServer)/front
 docker push $(azd env get-value acrLoginServer)/frontend:latest
 ```
 
-6) Container Apps 本体を作成または既存アプリを更新
+前提:
+- Azure CLI にログイン済み (az login)
+- ACR 名 (例: myuniquearc0123) または ACR の login server (例: myuniquearc0123.azurecr.io) を把握していること
+
+基本フロー:
+1. ACR にログイン
+2. docker compose でイメージをビルド（または既にビルド済み）
+3. ローカルイメージに ACR の FQDN を使ってタグ付け（または Compose の image を FQDN にしておく）
+4. ACR に push
+
+```powershell
+# 変数を設定
+$ACR_NAME = "myuniquearc0123"
+# ACR の login server を取得し、先頭/末尾の空白を除去
+$ACR_LOGIN_SERVER = (az acr show -n $ACR_NAME --query loginServer -o tsv).Trim()
+
+# ACR にログイン（az が内部で docker login を実行します）
+az acr login --name $ACR_NAME
+
+# docker compose でビルド（または既にビルド済み）
+docker compose build
+
+# ローカルイメージ名を確認（オプション）
+docker images --format "{{.Repository}}:{{.Tag}}\t{{.ID}}" | Select-String "frontend|backend"
+
+# 例: ローカルイメージが 'frontend:latest' / 'backend:latest' の場合、ACR 用にタグ付けして push
+docker tag udemy-containerapps-cicd-aiapp-frontend:latest $ACR_LOGIN_SERVER/frontend:latest
+docker tag udemy-containerapps-cicd-aiapp-backend:latest  $ACR_LOGIN_SERVER/backend:latest
+
+docker push $ACR_LOGIN_SERVER/frontend:latest
+docker push $ACR_LOGIN_SERVER/backend:latest
+```
+
+1) Container Apps 本体を作成または既存アプリを更新
 
 ```powershell
 # Managed Environment の ID を取得
