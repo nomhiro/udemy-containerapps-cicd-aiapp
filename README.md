@@ -398,6 +398,102 @@ az account show
 azd auth login
 ```
 
+### azd で「環境のみ」を払い出す手順
+
+このリポジトリの `infra/main.bicep` はコンテナアプリ本体を作成せず、Log Analytics / ACR / Container Apps Managed Environment / Cosmos DB などの「環境部分」のみを作成する構成になっています。`azd` を使って環境を払い出す手順を示します。
+
+ワークフローの意図:
+- まず azd で環境のみを払い出す（ACR にイメージが無くても失敗しない）
+- イメージをビルドして ACR に push
+- Container Apps 本体は CLI（`az containerapp create` / `az containerapp update`）で作成または更新する
+
+前提: `azure.yaml` がリポジトリにあり、azd がプロジェクトのインフラを参照できる状態であること
+
+1) azd にログインしてサブスクリプションを選択
+
+```powershell
+az login
+az account set --subscription <SUBSCRIPTION_ID>
+azd auth login
+```
+
+2) azd 環境変数を用意（対話を避けるためローカル env に設定）
+
+例: `dev` 環境名で払い出す場合
+
+```powershell
+# 環境名
+azd env set --local envName dev
+
+# (任意) ACR 名を明示する場合
+azd env set --local acrName myuniquearc0123
+
+# Cosmos の Free Tier を使う場合
+azd env set --local enableCosmosFreeTier true
+
+# 必要な他のパラメータも同様に azd env set --local <name> <value>
+```
+
+3) 環境のみを払い出す
+
+```powershell
+# azd up は infra を払い出し、コードビルドやイメージpushも行います。
+# 本テンプレートはアプリ本体を作らないため、azd up を実行すると環境のみが作成されます。
+azd up
+
+# あるいは non-interactive にしたい場合 (既に env に値を設定済みなら):
+azd up --no-wait
+```
+
+4) 出力値や設定値の確認
+
+```powershell
+# ACR の FQDN
+azd env get-value acrLoginServer
+
+# Container Apps Environment の ID
+azd env get-value environmentId
+
+# Cosmos のエンドポイント (シークレットは azd が secure に扱います)
+azd env get-value cosmosEndpoint
+```
+
+5) イメージをビルドして ACR に push
+
+```powershell
+az acr login --name $(azd env get-value acrName)
+docker build -f backend/Dockerfile -t $(azd env get-value acrLoginServer)/backend:latest ./backend
+docker push $(azd env get-value acrLoginServer)/backend:latest
+
+docker build -f frontend/Dockerfile -t $(azd env get-value acrLoginServer)/frontend:latest ./frontend
+docker push $(azd env get-value acrLoginServer)/frontend:latest
+```
+
+6) Container Apps 本体を作成または既存アプリを更新
+
+```powershell
+# Managed Environment の ID を取得
+ $envId = az containerapp env show --name $(azd env get-value envName)-cae --resource-group $(azd env get-value AZURE_RESOURCE_GROUP) --query id -o tsv
+
+# 新規作成 例
+az containerapp create --name <FRONTEND_APP_NAME> --resource-group $(azd env get-value AZURE_RESOURCE_GROUP) --environment $envId --image $(azd env get-value acrLoginServer)/frontend:latest --ingress external --target-port 80 --registry-server $(azd env get-value acrLoginServer)
+
+# 既存のプレースホルダーを更新
+az containerapp update --name <BACKEND_APP_NAME> --resource-group $(azd env get-value AZURE_RESOURCE_GROUP) --image $(azd env get-value acrLoginServer)/backend:latest
+```
+
+注意点:
+- Container Apps の Managed Identity に `AcrPull` ロールを付与する必要があります。azd のプロビジョンで自動付与が行われる場合もありますが、必要に応じて以下のように手動実行できます。
+
+```powershell
+az role assignment create --assignee-object-id <APP_PRINCIPAL_ID> --role AcrPull --scope $(az acr show -n $(azd env get-value acrName) --query id -o tsv)
+```
+
+- `azd up` は infra とアプリを一括で実行するコマンドです。今回のテンプレートはアプリ作成を行わないため `azd up` を使って環境のみ安全に払い出せます。
+
+---
+
+
 ```powershell
 (.venv) AzureContainerApps\src > azd up
 ? Enter a unique environment name: todoapp

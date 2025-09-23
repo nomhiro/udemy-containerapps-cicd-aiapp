@@ -1,33 +1,6 @@
 name: azure-container-apps-todo
 metadata:
-  template: minimal-container-apps
+  template: container-apps-base-env
 
 infra:
   path: ./infra
-
-services:
-  backend:
-    project: ./backend
-    host: containerapp
-    language: python
-    docker:
-    # path is relative to project directory; previously duplicated ./backend causing build failure
-    path: ./Dockerfile
-    registry:
-      source: acr
-    # azd will map selected outputs as environment variables automatically
-    # Additional env vars/secrets can be set with: azd env set KEY value / azd secret set KEY value
-  frontend:
-    project: ./frontend
-    host: containerapp
-    language: js
-    docker:
-    # path is relative to project directory
-    path: ./Dockerfile
-    registry:
-      source: acr
-
-pipeline:
-  # Placeholder; can be configured later with 'azd pipeline config'
-  provider: github
-  # After configuring pipeline you can enable OIDC and skip ACR if using managed builds.
