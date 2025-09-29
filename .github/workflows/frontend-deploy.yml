@@ -15,13 +15,6 @@ on:
   # 手動トリガー（Actions タブから実行）を許可
   workflow_dispatch: {}
 
-permissions:
-  # id-token: write は Azure への OIDC ログインを使う場合に必要です。
-  # （このワークフローでは az login に Secrets を使う形ですが、OIDC を使う場合に備えた設定です）
-  id-token: write
-  # GitHub レポジトリの内容を読む権限（checkout に必要）
-  contents: read
-
 concurrency:
   # 同一ブランチの同時実行を抑制します。古い実行はキャンセルされます。
   group: frontend-deploy-${{ github.ref_name }}

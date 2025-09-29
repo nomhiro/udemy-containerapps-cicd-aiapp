@@ -14,12 +14,6 @@ on:
       - '.github/workflows/backend-deploy.yml'
   workflow_dispatch: {}
 
-# id-token: write は Azure への OIDC ログインを使う場合に必要です。
-# （このワークフローでは az login に Secrets を使う形になっていますが、OIDC を使う場合に備える設定です）
-permissions:
-  id-token: write
-  contents: read
-
 # 同一ブランチの同時実行を抑制します。古い実行はキャンセルされます。
 concurrency:
   group: backend-deploy-${{ github.ref_name }}
