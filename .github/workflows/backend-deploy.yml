@@ -1,5 +1,10 @@
+## ワークフロー名: Backend Deploy
+## 説明: backend ディレクトリの変更や infra の変更が push されたときに実行される
+## このワークフローはテスト → イメージビルド → ACR に push → Container App にデプロイ の順に処理します。
 name: Backend Deploy
 
+# push イベント（main ブランチのみ）でトリガーします。
+# paths にヒットしたファイル変更がある場合のみ実行されます。
 on:
   push:
     branches: [ main ]
@@ -9,10 +14,13 @@ on:
       - '.github/workflows/backend-deploy.yml'
   workflow_dispatch: {}
 
+# id-token: write は Azure への OIDC ログインを使う場合に必要です。
+# （このワークフローでは az login に Secrets を使う形になっていますが、OIDC を使う場合に備える設定です）
 permissions:
   id-token: write
   contents: read
 
+# 同一ブランチの同時実行を抑制します。古い実行はキャンセルされます。
 concurrency:
   group: backend-deploy-${{ github.ref_name }}
   cancel-in-progress: true
@@ -36,11 +44,14 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+        # fetch-depth: 0 にすると完全な履歴（すべてのコミット）を取得します。
+        # SHA を正確に扱ったり、過去履歴を参照する処理がある場合に用います。
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
+          # Python のバージョンを固定してテスト実行環境を安定させます。
 
       - name: Cache pip
         uses: actions/cache@v4
@@ -49,16 +60,20 @@ jobs:
           key: pip-${{ runner.os }}-${{ hashFiles('backend/requirements.txt') }}
           restore-keys: |
             pip-${{ runner.os }}-
+          # pip キャッシュにより依存関係のインストールを高速化します。
 
       - name: Install backend deps
         working-directory: backend
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+      # 注: requirements.txt の内容によりキャッシュやインストール時間が変わります。
 
       - name: Run tests
         working-directory: backend
         run: pytest -q
+      # pytest を実行してユニット / 結合テストを検証します。
+      # ここで失敗した場合は後続のビルド／デプロイは実行されません（fail-fast）。
 
   build-deploy:
     needs: test
@@ -76,16 +91,23 @@ jobs:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          # Azure へログインするステップ。
+          # ここではクライアントID／テナントID／サブスクリプションID を Secrets から渡しています。
+          # （別途 OIDC を使う設定に変更することも可能です）
 
       - name: ACR Login
         run: az acr login --name $ACR_NAME
+      # ACR に対して docker push するために az CLI でログインします。
+      # (az acr login はローカル docker に対して認証情報を設定します)
 
       - name: Build Backend Image
         run: |
+          # Docker イメージをビルドします。タグに ACR の FQDN と IMAGE_TAG（コミット SHA）を付与します。
           docker build -f backend/Dockerfile -t $ACR_NAME.azurecr.io/$BACKEND_IMAGE_REPO:$IMAGE_TAG ./backend
 
       - name: Push Image
         run: docker push $ACR_NAME.azurecr.io/$BACKEND_IMAGE_REPO:$IMAGE_TAG
+      # イメージを ACR に push します。後続ステップでこのイメージを Container App にデプロイします。
 
       - name: Deploy / Update Container App
         run: |
@@ -93,10 +115,14 @@ jobs:
             --name $BACKEND_APP_NAME \
             --resource-group $RESOURCE_GROUP \
             --image $ACR_NAME.azurecr.io/$BACKEND_IMAGE_REPO:$IMAGE_TAG
+      # Container Apps のコンテナを更新するコマンドです。
+      # 既存の Container App を更新する想定なので、必要に応じて 'az containerapp create' に置き換えてください。
 
       - name: Output Image Ref
         run: echo "IMAGE=$ACR_NAME.azurecr.io/$BACKEND_IMAGE_REPO:$IMAGE_TAG" >> $GITHUB_OUTPUT
+      # このステップは他のジョブや後続処理にイメージ参照を渡すための出力を設定します。
 
       - name: Summary
         run: |
           echo "Deployed $BACKEND_APP_NAME with image tag $IMAGE_TAG" >> $GITHUB_STEP_SUMMARY
+      # GitHub Actions のジョブサマリにデプロイ結果を追記します（Actions の UI にわかりやすく表示されます）。
