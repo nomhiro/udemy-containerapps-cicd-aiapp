@@ -510,40 +510,58 @@ docker push $ACR_LOGIN_SERVER/backend:latest
 # --- 事前に設定する変数（例） ---
 $RESOURCE_GROUP      = $(azd env get-value AZURE_RESOURCE_GROUP)      # azd を使っている場合
 $ENV_NAME            = "dev"                                          # Managed Environment 接頭辞
-$ACR_LOGIN_SERVER    = $(azd env get-value acrLoginServer)            # ACR の FQDN
+$ACR_LOGIN_SERVER    = "devacr5wkj.azurecr.io"            # ACR の FQDN
+$ACR_NAME            = "devacr5wkj"                    # ACR 名（AcrPull ロール付与用）
 $FRONTEND_APP_NAME   = "todo-frontend"                               # 任意の App 名
 $BACKEND_APP_NAME    = "todo-backend"                                # 任意の App 名
 $FRONTEND_IMAGE_TAG  = "frontend:latest"                             # またはリリースタグ
 $BACKEND_IMAGE_TAG   = "backend:latest"
 
-# --- Managed Environment の ID を取得 ---
+# --- 共通リソース ID を取得 ---
 $ENV_ID = az containerapp env show --name "${ENV_NAME}-cae" --resource-group $RESOURCE_GROUP --query id -o tsv
+$ACR_RESOURCE_ID = az acr show --name $ACR_NAME --query id -o tsv
 
-# --- 新規作成例 (Backend) ---
-az containerapp create \
-  --name $BACKEND_APP_NAME \
-  --resource-group $RESOURCE_GROUP \
-  --environment $ENV_ID \
-  --image $ACR_LOGIN_SERVER/$BACKEND_IMAGE_TAG \
-  --ingress internal \
-  --target-port 80 \
-  --registry-server $ACR_LOGIN_SERVER
+# --- Backend Container App 作成 ---
+# 1. パブリックイメージで Container App を作成
+az containerapp create `
+  --name $BACKEND_APP_NAME `
+  --resource-group $RESOURCE_GROUP `
+  --environment $ENV_ID `
+  --image mcr.microsoft.com/mcr/hello-world `
+  --ingress internal `
+  --target-port 80 `
+  --system-assigned
 
-# --- 新規作成例 (Frontend) ---
-az containerapp create \
-  --name $FRONTEND_APP_NAME \
-  --resource-group $RESOURCE_GROUP \
-  --environment $ENV_ID \
-  --image $ACR_LOGIN_SERVER/$FRONTEND_IMAGE_TAG \
-  --ingress external \
-  --target-port 80 \
-  --registry-server $ACR_LOGIN_SERVER
+# 2. Managed Identity に AcrPull ロールを付与
+$BACKEND_PRINCIPAL_ID = az containerapp show --name $BACKEND_APP_NAME --resource-group $RESOURCE_GROUP --query identity.principalId -o tsv
+az role assignment create --assignee $BACKEND_PRINCIPAL_ID --role AcrPull --scope $ACR_RESOURCE_ID
 
-# --- 既存アプリのイメージ差し替え例 (Backend) ---
-az containerapp update \
-  --name $BACKEND_APP_NAME \
-  --resource-group $RESOURCE_GROUP \
+# 3. ACR のイメージに更新
+az containerapp update `
+  --name $BACKEND_APP_NAME `
+  --resource-group $RESOURCE_GROUP `
   --image $ACR_LOGIN_SERVER/$BACKEND_IMAGE_TAG
+
+# --- Frontend Container App 作成 ---
+# 1. パブリックイメージで Container App を作成
+az containerapp create `
+  --name $FRONTEND_APP_NAME `
+  --resource-group $RESOURCE_GROUP `
+  --environment $ENV_ID `
+  --image mcr.microsoft.com/mcr/hello-world `
+  --ingress external `
+  --target-port 80 `
+  --system-assigned
+
+# 2. Managed Identity に AcrPull ロールを付与
+$FRONTEND_PRINCIPAL_ID = az containerapp show --name $FRONTEND_APP_NAME --resource-group $RESOURCE_GROUP --query identity.principalId -o tsv
+az role assignment create --assignee $FRONTEND_PRINCIPAL_ID --role AcrPull --scope $ACR_RESOURCE_ID
+
+# 3. ACR のイメージに更新
+az containerapp update `
+  --name $FRONTEND_APP_NAME `
+  --resource-group $RESOURCE_GROUP `
+  --image $ACR_LOGIN_SERVER/$FRONTEND_IMAGE_TAG
 ```
 
 補足:
