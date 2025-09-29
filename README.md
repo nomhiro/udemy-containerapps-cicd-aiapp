@@ -209,10 +209,11 @@ npm install   # または: npm ci (lockfile ありの場合)
 3. **環境変数の設定**
 ```bash
 # backend/.env
-COSMOS_ENDPOINT=https://your-cosmos-account.documents.azure.com:443/
-COSMOS_KEY=your-cosmos-primary-key
-COSMOS_DATABASE=TodoApp
-LOG_LEVEL=DEBUG
+COSMOS_CONNECTION_STRING="COSMOSDBの接続文字列"
+COSMOS_DATABASE="TodoApp"
+COSMOS_CONTAINER="Todos"
+COSMOS_PARTITION_KEY="/id"
+LOG_LEVEL="INFO"
 
 # frontend/.env.local
 NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
@@ -510,8 +511,8 @@ docker push $ACR_LOGIN_SERVER/backend:latest
 # --- 事前に設定する変数（例） ---
 $RESOURCE_GROUP      = $(azd env get-value AZURE_RESOURCE_GROUP)      # azd を使っている場合
 $ENV_NAME            = "dev"                                          # Managed Environment 接頭辞
-$ACR_LOGIN_SERVER    = "devacr5wkj.azurecr.io"            # ACR の FQDN
-$ACR_NAME            = "devacr5wkj"                    # ACR 名（AcrPull ロール付与用）
+$ACR_LOGIN_SERVER    = "{ACRのリソース名称}.azurecr.io"            # ACR の FQDN
+$ACR_NAME            = "{ACRのリソース名称}"                    # ACR 名（AcrPull ロール付与用）
 $FRONTEND_APP_NAME   = "todo-frontend"                               # 任意の App 名
 $BACKEND_APP_NAME    = "todo-backend"                                # 任意の App 名
 $FRONTEND_IMAGE_TAG  = "frontend:latest"                             # またはリリースタグ
