@@ -380,6 +380,71 @@ Cosmos を使わないフェーズでは `COSMOS_DISABLE=1` を設定して in-m
 
 不足あれば Issue で提案してください。
 
+## API仕様
+
+### エンドポイント一覧
+
+| Method | Endpoint | Description | 備考 |
+|--------|----------|-------------|------|
+| POST | `/api/todos` | 作成 | createdAt/updatedAt サーバ生成 |
+| GET | `/api/todos` | 一覧 | フィルタ/ページング未実装 |
+| GET | `/api/todos/{id}` | 取得 | 404 when not found |
+| PATCH | `/api/todos/{id}` | 部分更新 | title/description/priority/dueDate/tags |
+| PATCH | `/api/todos/{id}/complete` | 完了化 | 冪等 / updatedAt 更新 |
+| PATCH | `/api/todos/{id}/reopen` | 未完へ戻す | 冪等 / updatedAt 更新 |
+| DELETE | `/api/todos/{id}` | 削除 | 204 / 404 |
+| GET | `/health` | Liveness |  |
+| GET | `/health/ready` | Readiness | Cosmos 接続後 ready 化予定 |
+
+### リクエスト例
+
+```bash
+# TODO作成
+curl -X POST "http://localhost:8000/api/todos" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Container Apps学習",
+    "description": "Azure Container Appsの基礎を学習する",
+    "priority": "high",
+    "dueDate": "2025-08-15T18:00:00Z",
+    "tags": ["学習", "Azure"]
+  }'
+
+# TODO一覧取得（現在フィルタ未対応）
+curl "http://localhost:8000/api/todos"
+```
+
+エラーフォーマット例:
+```
+404: {"detail":{"type":"not_found","id":"<id>"}}
+409: {"detail":{"type":"duplicate_todo_id","id":"<id>"}}
+422: {"detail":{"type":"validation_error","errors":[{"field":"priority","message":"...","errorType":"string_pattern_mismatch"}]}}
+500: {"detail":{"type":"internal_server_error","message":"Internal Server Error","status":500}}
+```
+
+詳細なAPI仕様は http://localhost:8000/docs で確認できます。エラーフォーマットの完全な仕様は [backend/README.md のエラーレスポンス仕様](backend/README.md#エラーレスポンス仕様) を参照してください。
+
+## テスト
+
+### 単体テスト実行
+
+```bash
+# バックエンドテスト
+cd backend
+pytest tests/ -v --cov=src
+
+# カバレッジレポート生成
+pytest tests/ --cov=src --cov-report=html
+```
+
+### 統合テスト実行
+
+```bash
+# Docker環境でのE2Eテスト
+docker-compose -f docker-compose.test.yml up --build --abort-on-container-exit
+```
+
+
 ## Azure環境へのデプロイ
 
 ### 前提条件
@@ -503,84 +568,14 @@ docker push $ACR_LOGIN_SERVER/frontend:latest
 docker push $ACR_LOGIN_SERVER/backend:latest
 ```
 
-1) Container Apps 本体を作成または既存アプリを更新
-
-リソース名やタグなど可変な値は事前に PowerShell の環境変数に設定しておくと、手順が読みやすくなりミスを減らせます。以下は推奨される手順例です。
-
-```powershell
-# --- 事前に設定する変数（例） ---
-$RESOURCE_GROUP      = $(azd env get-value AZURE_RESOURCE_GROUP)      # azd を使っている場合
-$ENV_NAME            = "dev"                                          # Managed Environment 接頭辞
-$ACR_LOGIN_SERVER    = "{ACRのリソース名称}.azurecr.io"            # ACR の FQDN
-$ACR_NAME            = "{ACRのリソース名称}"                    # ACR 名（AcrPull ロール付与用）
-$FRONTEND_APP_NAME   = "todo-frontend"                               # 任意の App 名
-$BACKEND_APP_NAME    = "todo-backend"                                # 任意の App 名
-$FRONTEND_IMAGE_TAG  = "frontend:latest"                             # またはリリースタグ
-$BACKEND_IMAGE_TAG   = "backend:latest"
-
-# --- 共通リソース ID を取得 ---
-$ENV_ID = az containerapp env show --name "${ENV_NAME}-cae" --resource-group $RESOURCE_GROUP --query id -o tsv
-$ACR_RESOURCE_ID = az acr show --name $ACR_NAME --query id -o tsv
-
-# --- Backend Container App 作成 ---
-# 1. パブリックイメージで Container App を作成
-az containerapp create `
-  --name $BACKEND_APP_NAME `
-  --resource-group $RESOURCE_GROUP `
-  --environment $ENV_ID `
-  --image mcr.microsoft.com/mcr/hello-world `
-  --ingress internal `
-  --target-port 80 `
-  --system-assigned
-
-# 2. Managed Identity に AcrPull ロールを付与
-$BACKEND_PRINCIPAL_ID = az containerapp show --name $BACKEND_APP_NAME --resource-group $RESOURCE_GROUP --query identity.principalId -o tsv
-az role assignment create --assignee $BACKEND_PRINCIPAL_ID --role AcrPull --scope $ACR_RESOURCE_ID
-
-# 3. ACR のイメージに更新
-az containerapp update `
-  --name $BACKEND_APP_NAME `
-  --resource-group $RESOURCE_GROUP `
-  --image $ACR_LOGIN_SERVER/$BACKEND_IMAGE_TAG
-
-# --- Frontend Container App 作成 ---
-# 1. パブリックイメージで Container App を作成
-az containerapp create `
-  --name $FRONTEND_APP_NAME `
-  --resource-group $RESOURCE_GROUP `
-  --environment $ENV_ID `
-  --image mcr.microsoft.com/mcr/hello-world `
-  --ingress external `
-  --target-port 80 `
-  --system-assigned
-
-# 2. Managed Identity に AcrPull ロールを付与
-$FRONTEND_PRINCIPAL_ID = az containerapp show --name $FRONTEND_APP_NAME --resource-group $RESOURCE_GROUP --query identity.principalId -o tsv
-az role assignment create --assignee $FRONTEND_PRINCIPAL_ID --role AcrPull --scope $ACR_RESOURCE_ID
-
-# 3. ACR のイメージに更新
-az containerapp update `
-  --name $FRONTEND_APP_NAME `
-  --resource-group $RESOURCE_GROUP `
-  --image $ACR_LOGIN_SERVER/$FRONTEND_IMAGE_TAG
-```
-
-補足:
-- `azd` を使って環境を払い出している場合は `azd env get-value <name>` で値を取得して変数にセットできます。上の例ではそれを利用しています。
-- 上記はシェル変数（PowerShell のスコープ）として設定する例です。セッションを跨いで永続化したい場合は `Set-Item -Path Env:VAR -Value "value"` 等で環境変数に設定してください。
-- 本番運用では `:latest` ではなくコミット SHA やバージョンタグを使う運用を推奨します。
-
-注意点:
+1) Container Apps の Managed Identity に ACR から pull する権限を付与
 - Container Apps の Managed Identity に `AcrPull` ロールを付与する必要があります。azd のプロビジョンで自動付与が行われる場合もありますが、必要に応じて以下のように手動実行できます。
 
 ```powershell
 az role assignment create --assignee-object-id <APP_PRINCIPAL_ID> --role AcrPull --scope $(az acr show -n $(azd env get-value acrName) --query id -o tsv)
 ```
 
-- `azd up` は infra とアプリを一括で実行するコマンドです。今回のテンプレートはアプリ作成を行わないため `azd up` を使って環境のみ安全に払い出せます。
-
 ---
-
 
 ```powershell
 (.venv) AzureContainerApps\src > azd up
@@ -598,96 +593,63 @@ New environment 'todoapp' created and set as default
 ? Enter a name for the new resource group: rg-todoapp
 ```
 
-## API仕様
+### Azure Container Apps
 
-### エンドポイント一覧
+2) Container Apps 本体を作成または既存アプリを更新
 
-| Method | Endpoint | Description | 備考 |
-|--------|----------|-------------|------|
-| POST | `/api/todos` | 作成 | createdAt/updatedAt サーバ生成 |
-| GET | `/api/todos` | 一覧 | フィルタ/ページング未実装 |
-| GET | `/api/todos/{id}` | 取得 | 404 when not found |
-| PATCH | `/api/todos/{id}` | 部分更新 | title/description/priority/dueDate/tags |
-| PATCH | `/api/todos/{id}/complete` | 完了化 | 冪等 / updatedAt 更新 |
-| PATCH | `/api/todos/{id}/reopen` | 未完へ戻す | 冪等 / updatedAt 更新 |
-| DELETE | `/api/todos/{id}` | 削除 | 204 / 404 |
-| GET | `/health` | Liveness |  |
-| GET | `/health/ready` | Readiness | Cosmos 接続後 ready 化予定 |
+リソース名やタグなど可変な値は事前に PowerShell の環境変数に設定しておくと、手順が読みやすくなりミスを減らせます。以下は推奨される手順例です。
 
-### リクエスト例
 
-```bash
-# TODO作成
-curl -X POST "http://localhost:8000/api/todos" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "title": "Container Apps学習",
-    "description": "Azure Container Appsの基礎を学習する",
-    "priority": "high",
-    "dueDate": "2025-08-15T18:00:00Z",
-    "tags": ["学習", "Azure"]
-  }'
+```powershell
+# --- 事前に設定する変数（例） ---
+$RESOURCE_GROUP      = $(azd env get-value AZURE_RESOURCE_GROUP)      # azd を使っている場合
+$ENV_NAME            = "dev"                                          # Managed Environment 接頭辞
+$ACR_LOGIN_SERVER    = "{ACRのリソース名称}.azurecr.io"            # ACR の FQDN
+$ACR_NAME            = "{ACRのリソース名称}"                    # ACR 名（AcrPull ロール付与用）
+$FRONTEND_APP_NAME   = "todo-frontend"                               # 任意の App 名
+$BACKEND_APP_NAME    = "todo-backend"                                # 任意の App 名
+$FRONTEND_IMAGE_TAG  = "frontend:latest"                             # またはリリースタグ
+$BACKEND_IMAGE_TAG   = "backend:latest"
 
-# TODO一覧取得（現在フィルタ未対応）
-curl "http://localhost:8000/api/todos"
+# --- 共通リソース ID を取得 ---
+$ENV_ID = az containerapp env show --name "${ENV_NAME}-cae" --resource-group $RESOURCE_GROUP --query id -o tsv
+$ACR_RESOURCE_ID = az acr show --name $ACR_NAME --query id -o tsv
+
+# --- Backend の Azure Container Apps を、Azure Container Registry のイメージで作成する手順 ---
+az containerapp create `
+  --name $BACKEND_APP_NAME `
+  --resource-group $RESOURCE_GROUP `
+  --environment $ENV_ID `
+  --image $ACR_LOGIN_SERVER/$BACKEND_IMAGE_TAG `
+  --ingress external `
+  --target-port 80 `
+  --system-assigned `
+  --secrets "cosmos-connection-string=<COSMOSDBの接続文字列>" `
+  --env-vars "COSMOS_CONNECTION_STRING=secretref:cosmos-connection-string" "COSMOS_DATABASE=TodoApp" "COSMOS_CONTAINER=Todos" "COSMOS_PARTITION_KEY=/id" "LOG_LEVEL=INFO"
+
+# --- Frontend の Azure Container Apps を、Azure Container Registry のイメージで作成する ---
+az containerapp create `
+  --name $FRONTEND_APP_NAME `
+  --resource-group $RESOURCE_GROUP `
+  --environment $ENV_ID `
+  --image $ACR_LOGIN_SERVER/$FRONTEND_IMAGE_TAG `
+  --ingress external `
+  --target-port 80 `
+  --system-assigned `
+  --env-vars "NEXT_PUBLIC_API_BASE_URL=/api" "BACKEND_API_BASE=URL=https://$BACKEND_APP_NAME.$ENV_NAME.azurecontainerapps.io"
 ```
 
-エラーフォーマット例:
-```
-404: {"detail":{"type":"not_found","id":"<id>"}}
-409: {"detail":{"type":"duplicate_todo_id","id":"<id>"}}
-422: {"detail":{"type":"validation_error","errors":[{"field":"priority","message":"...","errorType":"string_pattern_mismatch"}]}}
-500: {"detail":{"type":"internal_server_error","message":"Internal Server Error","status":500}}
-```
+### トラブルシュート (azd)
+| 症状 | 原因候補 | 対処 |
+|------|----------|------|
+| Image pull error | AcrPull 未反映 / イメージ未 Push | `az acr repository list -n <acr>` で確認、`az role assignment list` 再確認 |
+| Cosmos 認証失敗 | KEY 未同期 | `azd deploy` 再実行、シークレット値ローテーション確認 |
+| The subscription is not registered | プロバイダ未登録 | `az provider register -n Microsoft.App` 他を登録 |
 
-詳細なAPI仕様は http://localhost:8000/docs で確認できます。エラーフォーマットの完全な仕様は [backend/README.md のエラーレスポンス仕様](backend/README.md#エラーレスポンス仕様) を参照してください。
-
-## テスト
-
-### 単体テスト実行
-
-```bash
-# バックエンドテスト
-cd backend
-pytest tests/ -v --cov=src
-
-# カバレッジレポート生成
-pytest tests/ --cov=src --cov-report=html
-```
-
-### 統合テスト実行
-
-```bash
-# Docker環境でのE2Eテスト
-docker-compose -f docker-compose.test.yml up --build --abort-on-container-exit
-```
-
-## 監視・運用
-
-### ヘルスチェック
-
-- **Liveness probe**: `/health`
-- **Readiness probe**: `/health/ready`
-
-### メトリクス
-
-Application Insightsを通じて以下を監視：
-- HTTP リクエスト数・レスポンス時間
-- エラー率・例外発生数
-- Cosmos DB Request Unit消費量
-- コンテナリソース使用率
-
-### ログ
-
-構造化ログを出力し、Application Insightsで集約：
-```json
-{
-  "timestamp": "2025-01-01T12:00:00Z",
-  "level": "INFO",
-  "message": "TODO created successfully",
-  "todo_id": "todo_12345",
-  "duration_ms": 145
-}
+### クリーンアップ
+```powershell
+# 作成されたリソースグループを削除 (不可逆)
+az group delete --name <RESOURCE_GROUP> --yes --no-wait
 ```
 
 ## CI/CD パイプライン
@@ -708,38 +670,6 @@ Application Insightsを通じて以下を監視：
 
 > GitHub Actions の詳細な設定手順は [GITHUB_ACTIONS_SETTINGS.md](./docs/GITHUB_ACTIONS_SETTINGS/GITHUB_ACTIONS_SETTINGS.md) を参照してください。
 
-## パフォーマンス最適化
-
-### フロントエンド
-- ISR / SSG の活用による初期表示高速化
-- SWR によるクライアントキャッシュ & 再検証
-- Bundle 分割 / Dynamic Import / Tree Shaking
-- Next.js Image Optimization / Font 最適化
-- HTTP/2 & Compression (gzip/br) / CDNキャッシュ
-
-### バックエンド
-- Cosmos DBクエリ最適化（パーティションキー活用）
-- 非同期処理によるI/O待機時間短縮
-- レスポンス圧縮・キャッシュヘッダー設定
-
-### インフラ
-- Container Appsスケーリング設定調整
-- Cosmos DB RU最適化
-- CDNによる静的コンテンツ配信
-
-## セキュリティ
-
-### 実装済み
-- 入力値バリデーション（Pydantic）
-- CORS設定
-- HTTPSの強制
-- シークレット管理（Azure Key Vault）
-
-### 今後の拡張予定
-- ユーザー認証・認可（Azure AD B2C）
-- API レート制限
-- セキュリティヘッダー強化
-
 ## トラブルシューティング
 
 ### よくある問題
@@ -759,8 +689,6 @@ Application Insightsを通じて以下を監視：
    解決方法: dockerイメージのヘルスチェック設定を確認
    ```
 
-詳細は [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) を参照してください。
-
 ## コントリビューション
 
 1. このリポジトリをフォーク
@@ -768,16 +696,6 @@ Application Insightsを通じて以下を監視：
 3. 変更をコミット (`git commit -m 'Add amazing feature'`)
 4. ブランチにプッシュ (`git push origin feature/amazing-feature`)
 5. Pull Requestを作成
-
-## ライセンス
-
-このプロジェクトは MIT ライセンスの下で公開されています。詳細は [LICENSE](LICENSE) ファイルを参照してください。
-
-## お問い合わせ・サポート
-
-- **Issues**: [GitHub Issues](https://github.com/yourusername/azure-container-apps-todo/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/yourusername/azure-container-apps-todo/discussions)
-- **Email**: your.email@example.com
 
 ## 参考資料
 
@@ -787,85 +705,3 @@ Application Insightsを通じて以下を監視：
 - [Azure Cosmos DB Documentation](https://docs.microsoft.com/azure/cosmos-db/)
 - [講座学習ガイド](docs/COURSE_GUIDE.md)
 
-## IaC によるリソース払い出し (azd + Bicep)
-
-このプロジェクトは `azure.yaml` と `infra/` 以下の Bicep モジュールで Azure リソースを一括デプロイできます。手動 `az` コマンド列より再現性とロール割り当て (AcrPull) 自動化が向上します。
-
-### プロビジョン全体像
-- リソースグループ (任意: azd が自動生成/選択)
-- Log Analytics Workspace
-- Container Apps Environment
-- Azure Container Registry (任意: `acrName` を指定した場合のみ)
-- Cosmos DB (Serverless / Free Tier オプション)
-- Backend / Frontend Container Apps (System-assigned Managed Identity 付与)
-- ACR AcrPull ロール割り当て (ACR 利用時のみ)
-
-### 前提ツール
-- Azure CLI 2.56+ (`az upgrade`)
-- Azure Developer CLI (azd) 1.x+ : https://learn.microsoft.com/azure/developer/azure-developer-cli/
-- Docker (ローカルビルド時)
-
-### 初回セットアップ手順
-```powershell
-# 1. ログイン (必要に応じてテナント指定)
-az login
-
-# 2. サブスクリプション確認 / 切り替え
-az account show
-# 切替例: az account set --subscription <SUBSCRIPTION_ID>
-
-# 認証
-azd auth login
-
-# デプロイ (インフラ + ビルド + イメージ Push + コンテナアプリ更新)
-azd up
-```
-
-> NOTE: `acrName` を空にすると ACR/ロール割り当ては作成されず、`backendImage` / `frontendImage` には **Fully Qualified** (例: `ghcr.io/owner/image:tag`) なパブリックリポジトリを指定してください。
-
-### パラメータ / 環境変数 (env.<ENV>.json に保存)
-| 名前 | 用途 | 例 | 必須 |
-|------|------|----|------|
-| envName | 論理環境接頭辞 | dev | ✅ |
-| backendImage | Backend コンテナイメージ (FQ も可) | backend:latest | ✅ |
-| frontendImage | Frontend コンテナイメージ | frontend:latest | ✅ |
-| acrName | ACR 名 (指定時 Private Pull) | myuniquereg123 | 任意 |
-| enableCosmosFreeTier | Cosmos Free Tier 使用 | true/false | 任意 |
-| cosmosDatabaseName | DB 名 | TodoApp | 任意 |
-| cosmosContainerName | コンテナ名 | Todos | 任意 |
-| cosmosPartitionKey | パーティションキー | /id (または固定) | 任意 |
-
-### 再デプロイ
-コード/インフラ更新後:
-```powershell
-azd deploy            # コード + (変更あれば) インフラ差分反映
-```
-
-### イメージタグ更新 (リリース時)
-CI で新しいタグを発行したら:
-```powershell
-azd env set backendImage backend:v2025.08.31
-azd env set frontendImage frontend:v2025.08.31
-azd deploy
-```
-
-### ロール割り当て (AcrPull) について
-- `acrName` 指定時、自動で Container Apps の Managed Identity に AcrPull を付与。
-- 反映確認:
-```powershell
-az role assignment list --assignee $(azd env get-value BACKEND_PRINCIPAL_ID) --scope $(az acr show -n $(azd env get-value acrName) --query id -o tsv)
-```
-(参考: 変数名は出力に合わせて調整してください。)
-
-### クリーンアップ
-```powershell
-# 作成されたリソースグループを削除 (不可逆)
-az group delete --name <RESOURCE_GROUP> --yes --no-wait
-```
-
-### トラブルシュート (azd)
-| 症状 | 原因候補 | 対処 |
-|------|----------|------|
-| Image pull error | AcrPull 未反映 / イメージ未 Push | `az acr repository list -n <acr>` で確認、`az role assignment list` 再確認 |
-| Cosmos 認証失敗 | KEY 未同期 | `azd deploy` 再実行、シークレット値ローテーション確認 |
-| The subscription is not registered | プロバイダ未登録 | `az provider register -n Microsoft.App` 他を登録 |
